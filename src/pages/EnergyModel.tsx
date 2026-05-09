@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Panel } from "../components/Panel";
+import { ExportToolbar, type CSVPayload } from "../components/ExportToolbar";
 import { useHistoricalData } from "../hooks/useHistoricalData";
 import {
   annualTotals,
@@ -19,10 +20,18 @@ import { PaybackCalculator } from "../components/energy/PaybackCalculator";
 import { DailyProfile } from "../components/energy/DailyProfile";
 import { ENERGY_PRICES } from "../constants";
 
+const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 export function EnergyModel() {
   const { state } = useHistoricalData();
   const [building, setBuilding] = useState<BuildingParams>(DEFAULT_BUILDING);
   const [prices, setPrices] = useState<EnergyPrices>(DEFAULT_PRICES);
+
+  const balanceRef = useRef<HTMLDivElement>(null);
+  const dailyRef = useRef<HTMLDivElement>(null);
+  const costRef = useRef<HTMLDivElement>(null);
+  const nzebRef = useRef<HTMLDivElement>(null);
+  const rainRef = useRef<HTMLDivElement>(null);
 
   const monthly = useMemo(
     () => (state.data ? computeEnergyBalance(state.data.brasov.normals, building) : []),
@@ -54,6 +63,64 @@ export function EnergyModel() {
     );
   }
 
+  const balanceCSV = (): CSVPayload => ({
+    rows: monthly.map((m) => ({
+      month: MONTH[m.month],
+      heatingDemand_kWh: m.heatingDemand,
+      coolingDemand_kWh: m.coolingDemand,
+      solarGain_static_kWh: m.solarGainStatic,
+      solarGain_tracked_kWh: m.solarGainTracked,
+      solarGain_ideal_kWh: m.solarGainIdeal,
+      netHeating_static_kWh: m.netStatic,
+      netHeating_tracked_kWh: m.netTracked,
+      netHeating_ideal_kWh: m.netIdeal,
+      pvGeneration_kWh: m.pvGeneration,
+      rainwater_L: m.rainwaterLitres,
+    })),
+    meta: {
+      header: [
+        "Monthly energy balance · static / tracked / ideal scenarios",
+        `Floor area ${building.floorArea} m² · glazing ${(building.glazingRatio * 100).toFixed(0)}%`,
+        `Setpoint heat ${building.heatingSetpoint} °C · cool ${building.coolingSetpoint} °C`,
+      ],
+    },
+  });
+
+  const costCSV = (): CSVPayload => ({
+    rows: costs.map((c) => ({
+      source: c.source,
+      efficiency_or_COP: c.efficiency,
+      price_RON_per_kWh: c.pricePerKwh,
+      annualCost_static_RON: c.annualCostStatic,
+      annualCost_tracked_RON: c.annualCostTracked,
+      annualCost_ideal_RON: c.annualCostIdeal,
+      annualCO2_static_kg: c.co2Static,
+      annualCO2_tracked_kg: c.co2Tracked,
+      tracking_savings_RON: c.annualCostStatic - c.annualCostTracked,
+    })),
+    meta: { header: ["Annual heating cost · three scenarios · Romania prices"] },
+  });
+
+  const nzebCSV = (): CSVPayload => ({
+    rows: monthly.map((m) => ({
+      month: MONTH[m.month],
+      pvGeneration_kWh: m.pvGeneration,
+      consumption_static_kWh: m.netStatic + m.coolingDemand,
+      consumption_tracked_kWh: m.netTracked + m.coolingDemand,
+      surplus_kWh: m.pvGeneration - (m.netTracked + m.coolingDemand),
+    })),
+    meta: { header: [`NZEB · PV ${building.pvArea} m² × ${(building.pvEfficiency * 100).toFixed(0)}%`] },
+  });
+
+  const rainCSV = (): CSVPayload => ({
+    rows: monthly.map((m) => ({
+      month: MONTH[m.month],
+      rainwater_L: m.rainwaterLitres,
+      rainwater_m3: m.rainwaterLitres / 1000,
+    })),
+    meta: { header: [`Rainwater catchment · ${building.rainwaterArea} m² · η ${(building.rainwaterEfficiency * 100).toFixed(0)}%`] },
+  });
+
   return (
     <div className="space-y-3">
       <Panel id="[01]" title="Building Parameters" meta="all charts update live">
@@ -66,11 +133,27 @@ export function EnergyModel() {
           title="Monthly Energy Balance"
           meta="static · FOPID-tracked · ideal"
           className="xl:col-span-2"
+          trailing={
+            <ExportToolbar
+              targetRef={balanceRef}
+              filename="energy-monthly-balance"
+              csv={balanceCSV}
+            />
+          }
         >
-          <EnergyBalance monthly={monthly} />
+          <div ref={balanceRef}>
+            <EnergyBalance monthly={monthly} />
+          </div>
         </Panel>
-        <Panel id="[03]" title="Daily Profile" meta="winter vs summer">
-          <DailyProfile building={building} />
+        <Panel
+          id="[03]"
+          title="Daily Profile"
+          meta="winter vs summer"
+          trailing={<ExportToolbar targetRef={dailyRef} filename="energy-daily-profile" />}
+        >
+          <div ref={dailyRef}>
+            <DailyProfile building={building} />
+          </div>
         </Panel>
       </div>
 
@@ -106,10 +189,13 @@ export function EnergyModel() {
                 />
               </label>
             ))}
+            <ExportToolbar targetRef={costRef} filename="energy-cost" csv={costCSV} />
           </div>
         }
       >
-        <CostComparison costs={costs} />
+        <div ref={costRef}>
+          <CostComparison costs={costs} />
+        </div>
       </Panel>
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
@@ -117,15 +203,21 @@ export function EnergyModel() {
           id="[05]"
           title="NZEB · PV vs Consumption"
           meta={`PV ${building.pvArea} m² × ${(building.pvEfficiency * 100).toFixed(0)}% · tracking +${(building.pvTrackingBonus * 100).toFixed(0)}%`}
+          trailing={<ExportToolbar targetRef={nzebRef} filename="energy-nzeb" csv={nzebCSV} />}
         >
-          <NZEBAnalysis monthly={monthly} />
+          <div ref={nzebRef}>
+            <NZEBAnalysis monthly={monthly} />
+          </div>
         </Panel>
         <Panel
           id="[06]"
           title="Rainwater Catchment"
           meta={`${building.rainwaterArea} m² · η ${(building.rainwaterEfficiency * 100).toFixed(0)}%`}
+          trailing={<ExportToolbar targetRef={rainRef} filename="energy-rainwater" csv={rainCSV} />}
         >
-          <RainwaterChart monthly={monthly} />
+          <div ref={rainRef}>
+            <RainwaterChart monthly={monthly} />
+          </div>
         </Panel>
       </div>
 

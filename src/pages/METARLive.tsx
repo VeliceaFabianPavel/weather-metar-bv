@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Panel } from "../components/Panel";
 import { MetricCard } from "../components/MetricCard";
 import { CountdownRing } from "../components/CountdownRing";
 import { StatusDot } from "../components/StatusDot";
+import { ExportToolbar, type CSVPayload } from "../components/ExportToolbar";
 import { useWeather } from "../hooks/useWeather";
 import { useRealMETAR } from "../hooks/useRealMETAR";
 import {
@@ -33,11 +34,38 @@ export function METARLive() {
   const weather = useWeather();
   const metar = useRealMETAR();
   const [showManual, setShowManual] = useState(false);
+  const forecastRef = useRef<HTMLDivElement>(null);
 
   const snapshot = weather.state.data;
   const metarData = metar.state.data;
   const metarLoading = metar.state.status === "loading" && !metarData;
   const metarError = metar.state.status === "error" ? metar.state.error : null;
+
+  const forecastCSV = (): CSVPayload | null => {
+    if (!snapshot) return null;
+    const h = snapshot.hourly;
+    const rows = h.time.slice(0, 48).map((t, i) => ({
+      time_utc: t.toISOString(),
+      temperature_C: h.temperature[i],
+      humidity_pct: h.humidity[i],
+      cloudCover_pct: h.cloudCover[i],
+      visibility_m: h.visibility[i],
+      windSpeed_ms: h.windSpeed[i],
+      windDirection_deg: h.windDirection[i],
+      pressureMsl_hPa: h.pressureMsl[i],
+      weatherCode_wmo: h.weatherCode[i],
+    }));
+    return {
+      rows,
+      meta: {
+        header: [
+          "Open-Meteo 48 h forecast · ICON+GFS ensemble",
+          `Station: ${snapshot.station}`,
+          `Fetched: ${snapshot.fetchedAt.toISOString()}`,
+        ],
+      },
+    };
+  };
 
   const trend = useMemo<"rising" | "falling" | "stable">(() => {
     if (!snapshot) return "stable";
@@ -236,11 +264,21 @@ export function METARLive() {
       {/* Section C: 48h forecast */}
       {snapshot && (
         <div>
-          <div className="mb-2 flex items-baseline gap-3 px-1">
-            <span className="frame-id">[03]</span>
-            <span className="frame-title">48-Hour Forecast · GFS+ICON ensemble</span>
+          <div className="mb-2 flex items-baseline justify-between gap-3 px-1">
+            <div className="flex items-baseline gap-3">
+              <span className="frame-id">[03]</span>
+              <span className="frame-title">48-Hour Forecast · GFS+ICON ensemble</span>
+            </div>
+            <ExportToolbar
+              targetRef={forecastRef}
+              filename="metar-48h-forecast"
+              csv={() => forecastCSV() ?? { rows: [] }}
+              imageDisabled
+            />
           </div>
-          <WeatherCharts hourly={snapshot.hourly} hoursAhead={48} />
+          <div ref={forecastRef}>
+            <WeatherCharts hourly={snapshot.hourly} hoursAhead={48} />
+          </div>
         </div>
       )}
 

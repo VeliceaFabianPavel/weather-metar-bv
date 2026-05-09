@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Panel } from "../components/Panel";
 import { MetricCard } from "../components/MetricCard";
+import { ExportToolbar, type CSVPayload } from "../components/ExportToolbar";
 import { useSolarPosition } from "../hooks/useSolarPosition";
 import { useFOPIDSimulation } from "../hooks/useFOPIDSimulation";
 import { useWeather } from "../hooks/useWeather";
@@ -29,6 +30,10 @@ export function SolarControl() {
     targetRef.current = position.azimuth;
   }, [position.azimuth]);
 
+  const trajectoryRef = useRef<HTMLDivElement>(null);
+  const simRef = useRef<HTMLDivElement>(null);
+  const stepRef = useRef<HTMLDivElement>(null);
+
   const sim = useFOPIDSimulation({
     getTarget: () => targetRef.current,
     windSpeed: weatherState.data?.current.windSpeed ?? 0,
@@ -42,6 +47,32 @@ export function SolarControl() {
     : undefined;
 
   const sunBelowHorizon = position.elevation <= 0;
+
+  const simCSV = (): CSVPayload => ({
+    rows: sim.history.map((s) => ({
+      t_s: Number(s.t.toFixed(3)),
+      target_deg: Number(s.target.toFixed(3)),
+      current_deg: Number(s.current.toFixed(3)),
+      error_deg: Number(s.error.toFixed(4)),
+      output: Number(s.output.toFixed(4)),
+      P: Number(s.P.toFixed(4)),
+      I: Number(s.I.toFixed(4)),
+      D: Number(s.D.toFixed(4)),
+      velocity_dps: Number(s.velocity.toFixed(4)),
+      classical_current_deg:
+        s.classicalCurrent != null ? Number(s.classicalCurrent.toFixed(3)) : "",
+      classical_error_deg:
+        s.classicalError != null ? Number(s.classicalError.toFixed(4)) : "",
+    })),
+    meta: {
+      header: [
+        "FOPID solar tracking simulation · 10 Hz time series",
+        `Kp=${sim.params.Kp}, Ki=${sim.params.Ki}, Kd=${sim.params.Kd}, λ=${sim.params.lambda}, μ=${sim.params.mu}`,
+        `Compare mode: ${sim.compareMode ? "ON (classical PID baseline included)" : "OFF"}`,
+        `Sample window: ${sim.history.length} samples · last 10 simulated minutes`,
+      ],
+    },
+  });
 
   const sunriseLabel = useMemo(
     () => formatLocalTime(position.sunrise, STATION.timezone),
@@ -145,8 +176,17 @@ export function SolarControl() {
         id="[03]"
         title="Today's Solar Window"
         meta={`${now.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })} · LRBV · elevation ▬ · azimuth ╌`}
+        trailing={
+          <ExportToolbar
+            targetRef={trajectoryRef}
+            filename="solar-trajectory"
+            csvDisabled
+          />
+        }
       >
-        <SolarTrajectory date={now} />
+        <div ref={trajectoryRef}>
+          <SolarTrajectory date={now} />
+        </div>
       </Panel>
 
       {/* Compare mode bar */}
@@ -169,11 +209,27 @@ export function SolarControl() {
         </label>
       </div>
 
-      <SimulationCharts
-        history={sim.history}
-        classicalHistory={sim.classicalHistory}
-        compareMode={sim.compareMode}
-      />
+      <Panel
+        id="[04a]"
+        title="FOPID Time Series"
+        meta="tracking · error · P/I/D decomposition"
+        trailing={
+          <ExportToolbar
+            targetRef={simRef}
+            filename="fopid-simulation"
+            csv={simCSV}
+            imageDisabled
+          />
+        }
+      >
+        <div ref={simRef}>
+          <SimulationCharts
+            history={sim.history}
+            classicalHistory={sim.classicalHistory}
+            compareMode={sim.compareMode}
+          />
+        </div>
+      </Panel>
 
       {/* Performance */}
       <Panel
@@ -291,8 +347,17 @@ export function SolarControl() {
           title="Step Response Test"
           meta="Synthetic step input · open-loop run"
           className="xl:col-span-2"
+          trailing={
+            <ExportToolbar
+              targetRef={stepRef}
+              filename="fopid-step-response"
+              csvDisabled
+            />
+          }
         >
-          <StepResponse params={sim.params} compareMode={sim.compareMode} />
+          <div ref={stepRef}>
+            <StepResponse params={sim.params} compareMode={sim.compareMode} />
+          </div>
         </Panel>
 
         <Panel id="[07]" title="Disturbance Injection">

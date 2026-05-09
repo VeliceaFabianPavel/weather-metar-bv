@@ -11,14 +11,18 @@ const ClimateHistory = lazy(() =>
 const EnergyModel = lazy(() =>
   import("./pages/EnergyModel").then((m) => ({ default: m.EnergyModel })),
 );
+const ResearchTools = lazy(() =>
+  import("./pages/ResearchTools").then((m) => ({ default: m.ResearchTools })),
+);
 
-type TabKey = "metar" | "solar" | "climate" | "energy";
+type TabKey = "metar" | "solar" | "climate" | "energy" | "research";
 
 const TABS: TabDef<TabKey>[] = [
   { key: "metar", label: "METAR", hint: "60s sync" },
   { key: "solar", label: "Solar / FOPID", hint: "10 Hz sim" },
   { key: "climate", label: "Climate", hint: "10y archive" },
   { key: "energy", label: "Energy", hint: "thermal model" },
+  { key: "research", label: "Research", hint: "export · cite" },
 ];
 
 export default function App() {
@@ -41,6 +45,11 @@ export default function App() {
             {active === "energy" && (
               <Suspense fallback={<TabFallback label="Loading energy model…" />}>
                 <EnergyModel />
+              </Suspense>
+            )}
+            {active === "research" && (
+              <Suspense fallback={<TabFallback label="Loading research tools…" />}>
+                <ResearchTools />
               </Suspense>
             )}
           </div>
