@@ -72,7 +72,7 @@ A colored bar between sun and house shows the angular error - green when aligned
 
 ## F3 · Climate history
 
-Ten years of daily weather data (2015–2024) for both **Brașov city** (528 m elevation) and the mountain resort of **Poiana Brașov** (1020 m), pulled from the ERA5 reanalysis archive.
+Twelve years of daily weather data (2015–2026) for both **Brașov city** (528 m elevation) and the mountain resort of **Poiana Brașov** (1020 m), pulled from the ERA5 reanalysis archive.
 
 | Visualization | What it tells you |
 |---|---|
@@ -110,7 +110,7 @@ An interactive thermal and financial model. You edit the building parameters - f
 | **Vatsim METAR network** (primary) | The real LRBV METAR string | Every 60 s |
 | **NOAA AviationWeather** (proxy fallback) | Same, when Vatsim is unreachable | Every 60 s |
 | **Open-Meteo Forecast API** | Current temperature/wind/pressure + 48-hour hourly forecast | Every 60 s |
-| **Open-Meteo Archive (ERA5)** | 2015–2024 daily climate data for two stations | Once, cached 30 days |
+| **Open-Meteo Archive (ERA5)** | 2015–2026 daily climate data for two stations | Once, cached 30 days |
 
 All endpoints are free and CORS-friendly. **No API keys required.**
 

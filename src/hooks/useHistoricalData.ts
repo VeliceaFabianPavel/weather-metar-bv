@@ -58,8 +58,14 @@ export interface UseHistoricalDataResult {
 }
 
 const START_DATE = "2015-01-01";
-const END_DATE = "2024-12-31";
-const CACHE_KEY = "lrbv-climate-cache-v4";
+function todayISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+const CACHE_KEY = "lrbv-climate-cache-v5";
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 interface CacheEnvelope {
@@ -144,7 +150,7 @@ async function fetchArchive(
 
 export function useHistoricalData(
   startDate = START_DATE,
-  endDate = END_DATE,
+  endDate = todayISO(),
 ): UseHistoricalDataResult {
   const [state, setState] = useState<FetchState<ClimateBundle>>({ status: "idle" });
   const [progress, setProgress] = useState({ fetched: 0, total: 3, phase: "Idle" });
